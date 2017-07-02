@@ -17,8 +17,11 @@
 
 package com.alibaba.rocketmq.broker.transaction.jdbc;
 
-import com.alibaba.rocketmq.broker.transaction.TransactionRecord;
-import com.alibaba.rocketmq.broker.transaction.TransactionStore;
+import com.alibaba.rocketmq.store.transaction.TransactionRecord;
+import com.alibaba.rocketmq.store.transaction.TransactionStore;
+import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStore;
+import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStoreConfig;
+
 import org.junit.Assert;
 import org.junit.Test;
 

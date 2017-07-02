@@ -31,9 +31,12 @@ public class DispatchRequest {
     private final boolean success;
     private final String uniqKey;
 
+    /**
+     * 事务消息部分属性
+     */
     private final int sysFlag;
-    private final long preparedTransactionOffset;
-
+    private final long preparedTransactionOffset; //待清除的预备状态消息的commitlog offset
+    private final String producerGroup;
 
     public DispatchRequest(//
             final String topic,// 1
@@ -46,7 +49,8 @@ public class DispatchRequest {
             final String keys,// 8
             final String uniqKey,
             final int sysFlag,// 9
-            final long preparedTransactionOffset// 10
+            final long preparedTransactionOffset,// 10
+            final String producerGroup // 11
     ) {
         this.topic = topic;
         this.queueId = queueId;
@@ -60,6 +64,7 @@ public class DispatchRequest {
 
         this.sysFlag = sysFlag;
         this.preparedTransactionOffset = preparedTransactionOffset;
+        this.producerGroup = producerGroup;
         this.success = true;
     }
 
@@ -84,6 +89,7 @@ public class DispatchRequest {
         this.uniqKey = null;
         this.sysFlag = 0;
         this.preparedTransactionOffset = 0;
+        this.producerGroup = "";
         this.success = false;
     }
 
@@ -108,60 +114,50 @@ public class DispatchRequest {
         this.uniqKey = null;
         this.sysFlag = 0;
         this.preparedTransactionOffset = 0;
+        this.producerGroup = "";
         this.success = success;
     }
-
-
+    
     public String getTopic() {
         return topic;
     }
-
-
+    
     public int getQueueId() {
         return queueId;
     }
 
-
     public long getCommitLogOffset() {
         return commitLogOffset;
     }
-
-
+    
     public int getMsgSize() {
         return msgSize;
     }
-
-
+    
     public long getStoreTimestamp() {
         return storeTimestamp;
     }
 
-
     public long getConsumeQueueOffset() {
         return consumeQueueOffset;
     }
-
-
+    
     public String getKeys() {
         return keys;
     }
 
-
     public long getTagsCode() {
         return tagsCode;
     }
-
-
+    
     public int getSysFlag() {
         return sysFlag;
     }
-
-
+    
     public long getPreparedTransactionOffset() {
         return preparedTransactionOffset;
     }
-
-
+    
     public boolean isSuccess() {
         return success;
     }
@@ -170,5 +166,8 @@ public class DispatchRequest {
         return uniqKey;
     }
 
-
+	public String getProducerGroup() {
+		return producerGroup;
+	}
+	
 }

@@ -38,18 +38,13 @@ public class EndTransactionRequestHeader implements CommandCustomHeader {
     @CFNotNull
     private Long commitLogOffset;
     @CFNotNull
-    private Integer commitOrRollback; // TransactionCommitType
-    // TransactionRollbackType
-    // TransactionNotType
-
+    private Integer commitOrRollback; // TransactionCommitType 、TransactionRollbackType 、TransactionNotType
     @CFNullable
     private Boolean fromTransactionCheck = false;
-
     @CFNotNull
     private String msgId;
-
     private String transactionId;
-
+    
     @Override
     public void checkFields() throws RemotingCommandException {
         if (MessageSysFlag.TransactionNotType == this.commitOrRollback) {

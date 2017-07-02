@@ -16,13 +16,6 @@
  */
 package com.alibaba.rocketmq.broker.client;
 
-import com.alibaba.rocketmq.common.constant.LoggerName;
-import com.alibaba.rocketmq.remoting.common.RemotingHelper;
-import com.alibaba.rocketmq.remoting.common.RemotingUtil;
-import io.netty.channel.Channel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -30,6 +23,15 @@ import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.alibaba.rocketmq.common.constant.LoggerName;
+import com.alibaba.rocketmq.remoting.common.RemotingHelper;
+import com.alibaba.rocketmq.remoting.common.RemotingUtil;
+
+import io.netty.channel.Channel;
 
 
 /**
@@ -64,8 +66,32 @@ public class ProducerManager {
         }
         return newGroupChannelTable;
     }
+    
+    public ClientChannelInfo pickProducerChannelRandomly(String producerGroup) {
+        HashMap<Channel, ClientChannelInfo> map = new HashMap<Channel, ClientChannelInfo>();
 
-
+        try {
+            if (this.groupChannelLock.tryLock(LockTimeoutMillis, TimeUnit.MILLISECONDS)) {
+                try {
+                    Map<Channel, ClientChannelInfo> matchedMap = groupChannelTable.get(producerGroup);
+                    if (null != matchedMap) {
+                        map.putAll(matchedMap);
+                    }
+                } finally {
+                    groupChannelLock.unlock();
+                }
+            }
+        } catch (InterruptedException e) {
+            log.error("pickProducerChannelRandomly lock InterruptedException", e);
+        }
+        
+        if (map.isEmpty()) {
+            return null;
+        }
+        
+        return map.values().iterator().next();
+    }
+    
     public void scanNotActiveChannel() {
         try {
             if (this.groupChannelLock.tryLock(LockTimeoutMillis, TimeUnit.MILLISECONDS)) {

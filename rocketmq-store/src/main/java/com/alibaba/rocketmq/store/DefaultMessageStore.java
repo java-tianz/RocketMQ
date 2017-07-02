@@ -16,7 +16,33 @@
  */
 package com.alibaba.rocketmq.store;
 
-import com.alibaba.rocketmq.common.*;
+import static com.alibaba.rocketmq.store.config.BrokerRole.SLAVE;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.alibaba.rocketmq.common.BrokerConfig;
+import com.alibaba.rocketmq.common.MixAll;
+import com.alibaba.rocketmq.common.ServiceThread;
+import com.alibaba.rocketmq.common.SystemClock;
+import com.alibaba.rocketmq.common.ThreadFactoryImpl;
+import com.alibaba.rocketmq.common.UtilAll;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.message.MessageDecoder;
 import com.alibaba.rocketmq.common.message.MessageExt;
@@ -31,22 +57,8 @@ import com.alibaba.rocketmq.store.index.IndexService;
 import com.alibaba.rocketmq.store.index.QueryOffsetResult;
 import com.alibaba.rocketmq.store.schedule.ScheduleMessageService;
 import com.alibaba.rocketmq.store.stats.BrokerStatsManager;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-
-import static com.alibaba.rocketmq.store.config.BrokerRole.SLAVE;
+import com.alibaba.rocketmq.store.transaction.TransactionRecord;
+import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStore;
 
 
 /**
@@ -60,6 +72,8 @@ public class DefaultMessageStore implements MessageStore {
     private final MessageStoreConfig messageStoreConfig;
     // CommitLog
     private final CommitLog commitLog;
+    
+    private final JDBCTransactionStore jdbcTransactionStore;
 
     private final ConcurrentHashMap<String/* topic */, ConcurrentHashMap<Integer/* queueId */, ConsumeQueue>> consumeQueueTable;
 
@@ -97,11 +111,15 @@ public class DefaultMessageStore implements MessageStore {
     private AtomicLong printTimes = new AtomicLong(0);
 
 
-    public DefaultMessageStore(final MessageStoreConfig messageStoreConfig, final BrokerStatsManager brokerStatsManager,
-                               final MessageArrivingListener messageArrivingListener, final BrokerConfig brokerConfig) throws IOException {
+    public DefaultMessageStore(final MessageStoreConfig messageStoreConfig, 
+    		final BrokerStatsManager brokerStatsManager,
+    		final MessageArrivingListener messageArrivingListener,
+    		final BrokerConfig brokerConfig,
+    		final JDBCTransactionStore jdbcTransactionStore) throws IOException {
         this.messageArrivingListener = messageArrivingListener;
         this.brokerConfig = brokerConfig;
         this.messageStoreConfig = messageStoreConfig;
+        this.jdbcTransactionStore = jdbcTransactionStore;
         this.brokerStatsManager = brokerStatsManager;
         this.allocateMapedFileService = new AllocateMapedFileService(this);
         this.commitLog = new CommitLog(this);
@@ -243,7 +261,8 @@ public class DefaultMessageStore implements MessageStore {
             this.allocateMapedFileService.shutdown();
             this.storeCheckpoint.flush();
             this.storeCheckpoint.shutdown();
-
+            this.jdbcTransactionStore.close();
+            
             if (this.runningFlags.isWriteable()) {
                 this.deleteFile(StorePathConfigHelper.getAbortFile(this.messageStoreConfig.getStorePathRootDir()));
             } else {
@@ -1218,6 +1237,10 @@ public class DefaultMessageStore implements MessageStore {
     public MessageStoreConfig getMessageStoreConfig() {
         return messageStoreConfig;
     }
+    
+    public JDBCTransactionStore getJdbcTransactionStore() {
+        return jdbcTransactionStore;
+    }
 
     private void putConsumeQueue(final String topic, final int queueId, final ConsumeQueue consumeQueue) {
         ConcurrentHashMap<Integer/* queueId */, ConsumeQueue> map = this.consumeQueueTable.get(topic);
@@ -1291,9 +1314,18 @@ public class DefaultMessageStore implements MessageStore {
             case MessageSysFlag.TransactionCommitType:
                 DefaultMessageStore.this.putMessagePostionInfo(req.getTopic(), req.getQueueId(), req.getCommitLogOffset(), req.getMsgSize(),
                         req.getTagsCode(), req.getStoreTimestamp(), req.getConsumeQueueOffset());
+                if(tranType == MessageSysFlag.TransactionCommitType){
+                	//提交成功，将消息从事务状态表中删除，不再做回查了
+                	jdbcTransactionStore.remove(req.getPreparedTransactionOffset());
+                }
                 break;
             case MessageSysFlag.TransactionPreparedType:
+            	//将消息加入事务状态表，以便于broker进行会查
+            	jdbcTransactionStore.put(new TransactionRecord(req.getCommitLogOffset(), req.getProducerGroup()));
+            	break;
             case MessageSysFlag.TransactionRollbackType:
+            	//回滚成功，将消息从事务状态表中删除，不再做回查了
+            	jdbcTransactionStore.remove(req.getPreparedTransactionOffset());
                 break;
         }
 

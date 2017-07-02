@@ -15,28 +15,32 @@
  *  limitations under the License.
  */
 
-package com.alibaba.rocketmq.broker.transaction;
+package com.alibaba.rocketmq.store.transaction;
 
 public class TransactionRecord {
-    // Commit Log Offset
-    private long offset;
+    private long offset; // Commit Log Offset
     private String producerGroup;
 
+    public TransactionRecord() {
+    	
+    }
+    
+    public TransactionRecord(long offset, String producerGroup) {
+		this.offset = offset;
+		this.producerGroup = producerGroup;
+	}
 
-    public long getOffset() {
+	public long getOffset() {
         return offset;
     }
-
 
     public void setOffset(long offset) {
         this.offset = offset;
     }
 
-
     public String getProducerGroup() {
         return producerGroup;
     }
-
 
     public void setProducerGroup(String producerGroup) {
         this.producerGroup = producerGroup;

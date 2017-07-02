@@ -14,28 +14,20 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package com.alibaba.rocketmq.client.producer;
+package com.alibaba.rocketmq.broker.transaction;
 
-/**
- * @author shijia.wxr
- */
-public class TransactionSendResult extends SendResult {
-    private LocalTransactionState localTransactionState;
-    
-    public TransactionSendResult() {
-    }
-    
-    public LocalTransactionState getLocalTransactionState() {
-        return localTransactionState;
-    }
-    
-    public void setLocalTransactionState(LocalTransactionState localTransactionState) {
-        this.localTransactionState = localTransactionState;
-    }
-    
-    @Override
-    public String toString() {
-        return "TransactionSendResult [[" + super.toString() + "], localTransactionState=" + localTransactionState + "]";
-    }
-    
+public interface TransactionStateChecker {
+
+    /**
+     * <p>
+     *  This method would perform transaction state check.
+     * </p>
+     *
+     * <p>
+     *     If the transaction has been lagged behind for specified time, this method will send check-transaction-state
+     *     request to other online producer instance of same producer group.
+     * </p>
+     */
+    void check();
+
 }

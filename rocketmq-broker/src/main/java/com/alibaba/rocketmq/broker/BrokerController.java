@@ -16,7 +16,29 @@
  */
 package com.alibaba.rocketmq.broker;
 
-import com.alibaba.rocketmq.broker.client.*;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.alibaba.rocketmq.broker.client.ClientHousekeepingService;
+import com.alibaba.rocketmq.broker.client.ConsumerIdsChangeListener;
+import com.alibaba.rocketmq.broker.client.ConsumerManager;
+import com.alibaba.rocketmq.broker.client.DefaultConsumerIdsChangeListener;
+import com.alibaba.rocketmq.broker.client.ProducerManager;
 import com.alibaba.rocketmq.broker.client.net.Broker2Client;
 import com.alibaba.rocketmq.broker.client.rebalance.RebalanceLockManager;
 import com.alibaba.rocketmq.broker.filtersrv.FilterServerManager;
@@ -30,11 +52,23 @@ import com.alibaba.rocketmq.broker.offset.ConsumerOffsetManager;
 import com.alibaba.rocketmq.broker.out.BrokerOuterAPI;
 import com.alibaba.rocketmq.broker.plugin.MessageStoreFactory;
 import com.alibaba.rocketmq.broker.plugin.MessageStorePluginContext;
-import com.alibaba.rocketmq.broker.processor.*;
+import com.alibaba.rocketmq.broker.processor.AdminBrokerProcessor;
+import com.alibaba.rocketmq.broker.processor.ClientManageProcessor;
+import com.alibaba.rocketmq.broker.processor.EndTransactionProcessor;
+import com.alibaba.rocketmq.broker.processor.PullMessageProcessor;
+import com.alibaba.rocketmq.broker.processor.QueryMessageProcessor;
+import com.alibaba.rocketmq.broker.processor.SendMessageProcessor;
 import com.alibaba.rocketmq.broker.slave.SlaveSynchronize;
 import com.alibaba.rocketmq.broker.subscription.SubscriptionGroupManager;
 import com.alibaba.rocketmq.broker.topic.TopicConfigManager;
-import com.alibaba.rocketmq.common.*;
+import com.alibaba.rocketmq.broker.transaction.DefaultTransactionStateChecker;
+import com.alibaba.rocketmq.broker.transaction.TransactionStateChecker;
+import com.alibaba.rocketmq.common.BrokerConfig;
+import com.alibaba.rocketmq.common.DataVersion;
+import com.alibaba.rocketmq.common.MixAll;
+import com.alibaba.rocketmq.common.ThreadFactoryImpl;
+import com.alibaba.rocketmq.common.TopicConfig;
+import com.alibaba.rocketmq.common.UtilAll;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.common.constant.PermName;
 import com.alibaba.rocketmq.common.namesrv.RegisterBrokerResult;
@@ -43,7 +77,11 @@ import com.alibaba.rocketmq.common.protocol.body.TopicConfigSerializeWrapper;
 import com.alibaba.rocketmq.common.stats.MomentStatsItem;
 import com.alibaba.rocketmq.remoting.RPCHook;
 import com.alibaba.rocketmq.remoting.RemotingServer;
-import com.alibaba.rocketmq.remoting.netty.*;
+import com.alibaba.rocketmq.remoting.netty.NettyClientConfig;
+import com.alibaba.rocketmq.remoting.netty.NettyRemotingServer;
+import com.alibaba.rocketmq.remoting.netty.NettyRequestProcessor;
+import com.alibaba.rocketmq.remoting.netty.NettyServerConfig;
+import com.alibaba.rocketmq.remoting.netty.RequestTask;
 import com.alibaba.rocketmq.store.DefaultMessageStore;
 import com.alibaba.rocketmq.store.MessageArrivingListener;
 import com.alibaba.rocketmq.store.MessageStore;
@@ -51,14 +89,8 @@ import com.alibaba.rocketmq.store.config.BrokerRole;
 import com.alibaba.rocketmq.store.config.MessageStoreConfig;
 import com.alibaba.rocketmq.store.stats.BrokerStats;
 import com.alibaba.rocketmq.store.stats.BrokerStatsManager;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.util.*;
-import java.util.concurrent.*;
-
+import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStore;
+import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStoreConfig;
 
 /**
  * @author shijia.wxr
@@ -105,17 +137,25 @@ public class BrokerController {
     private BrokerStats brokerStats;
     private InetSocketAddress storeHost;
     private BrokerFastFailure brokerFastFailure;
-
+    
+    private JDBCTransactionStoreConfig jdbcTransactionStoreConfig;
+    private JDBCTransactionStore jdbcTransactionStore;
+    private final TransactionStateChecker transactionStateChecker;
+    private final ScheduledExecutorService checkTransactionStateExecutorService;
+    
     public BrokerController(//
                             final BrokerConfig brokerConfig, //
                             final NettyServerConfig nettyServerConfig, //
                             final NettyClientConfig nettyClientConfig, //
-                            final MessageStoreConfig messageStoreConfig //
+                            final MessageStoreConfig messageStoreConfig, //
+                            final JDBCTransactionStoreConfig jdbcTransactionStoreConfig
     ) {
         this.brokerConfig = brokerConfig;
         this.nettyServerConfig = nettyServerConfig;
         this.nettyClientConfig = nettyClientConfig;
         this.messageStoreConfig = messageStoreConfig;
+        this.jdbcTransactionStoreConfig = jdbcTransactionStoreConfig;
+        
         this.consumerOffsetManager = new ConsumerOffsetManager(this);
         this.topicConfigManager = new TopicConfigManager(this);
         this.pullMessageProcessor = new PullMessageProcessor(this);
@@ -145,6 +185,12 @@ public class BrokerController {
         this.setStoreHost(new InetSocketAddress(this.getBrokerConfig().getBrokerIP1(), this.getNettyServerConfig().getListenPort()));
 
         this.brokerFastFailure = new BrokerFastFailure(this);
+        
+        this.jdbcTransactionStore = new JDBCTransactionStore(jdbcTransactionStoreConfig);
+        this.transactionStateChecker = new DefaultTransactionStateChecker(this);
+
+        checkTransactionStateExecutorService = Executors.newScheduledThreadPool(brokerConfig.getBroker2ClientThreadPoolNums(),
+                new ThreadFactoryImpl("Broker2ClientService_"));
     }
 
     public BrokerConfig getBrokerConfig() {
@@ -161,17 +207,17 @@ public class BrokerController {
 
     public boolean initialize() throws CloneNotSupportedException {
         boolean result = true;
-
+        
         result = result && this.topicConfigManager.load();
-
         result = result && this.consumerOffsetManager.load();
         result = result && this.subscriptionGroupManager.load();
-
+        result = result && this.jdbcTransactionStore.open();
+        
         if (result) {
             try {
                 this.messageStore =
                         new DefaultMessageStore(this.messageStoreConfig, this.brokerStatsManager, this.messageArrivingListener,
-                                this.brokerConfig);
+                                this.brokerConfig, this.jdbcTransactionStore);
                 this.brokerStats = new BrokerStats((DefaultMessageStore) this.messageStore);
                 //load plugin
                 MessageStorePluginContext context = new MessageStorePluginContext(messageStoreConfig, brokerStatsManager, messageArrivingListener, brokerConfig);
@@ -312,6 +358,17 @@ public class BrokerController {
                     }
                 }, 1000 * 10, 1000 * 60, TimeUnit.MILLISECONDS);
             } else {
+            	this.checkTransactionStateExecutorService.scheduleAtFixedRate(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            transactionStateChecker.check();
+                        } catch (Exception e) {
+                            log.error("Schedule check", e);
+                        }
+                    }
+                }, 30, 30, TimeUnit.SECONDS);
+            	
                 this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
                     @Override
@@ -474,6 +531,14 @@ public class BrokerController {
 
     public MessageStoreConfig getMessageStoreConfig() {
         return messageStoreConfig;
+    }
+    
+    public JDBCTransactionStoreConfig getJdbcTransactionStoreConfig() {
+        return jdbcTransactionStoreConfig;
+    }
+
+    public JDBCTransactionStore getJdbcTransactionStore() {
+        return jdbcTransactionStore;
     }
 
     public ProducerManager getProducerManager() {
@@ -659,7 +724,7 @@ public class BrokerController {
             }
         }
     }
-
+    
     public TopicConfigManager getTopicConfigManager() {
         return topicConfigManager;
     }
@@ -804,5 +869,9 @@ public class BrokerController {
 
     public void setStoreHost(InetSocketAddress storeHost) {
         this.storeHost = storeHost;
+    }
+    
+    public ScheduledExecutorService getCheckTransactionStateExecutorService() {
+        return checkTransactionStateExecutorService;
     }
 }

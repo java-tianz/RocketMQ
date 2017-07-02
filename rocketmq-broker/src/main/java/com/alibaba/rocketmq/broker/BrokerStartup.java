@@ -16,8 +16,19 @@
  */
 package com.alibaba.rocketmq.broker;
 
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.joran.JoranConfigurator;
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.PosixParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.alibaba.rocketmq.common.BrokerConfig;
 import com.alibaba.rocketmq.common.MQVersion;
 import com.alibaba.rocketmq.common.MixAll;
@@ -30,18 +41,10 @@ import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 import com.alibaba.rocketmq.srvutil.ServerUtil;
 import com.alibaba.rocketmq.store.config.BrokerRole;
 import com.alibaba.rocketmq.store.config.MessageStoreConfig;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.PosixParser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.alibaba.rocketmq.store.transaction.jdbc.JDBCTransactionStoreConfig;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
 
 
 /**
@@ -114,8 +117,8 @@ public class BrokerStartup {
             final NettyClientConfig nettyClientConfig = new NettyClientConfig();
             nettyServerConfig.setListenPort(10911);
             final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
-
-
+            final JDBCTransactionStoreConfig jdbcTransactionStoreConfig = new JDBCTransactionStoreConfig();
+            
             if (BrokerRole.SLAVE == messageStoreConfig.getBrokerRole()) {
                 int ratio = messageStoreConfig.getAccessMessageInMemoryMaxRatio() - 10;
                 messageStoreConfig.setAccessMessageInMemoryMaxRatio(ratio);
@@ -150,7 +153,8 @@ public class BrokerStartup {
                     MixAll.properties2Object(properties, nettyServerConfig);
                     MixAll.properties2Object(properties, nettyClientConfig);
                     MixAll.properties2Object(properties, messageStoreConfig);
-
+                    MixAll.properties2Object(properties, jdbcTransactionStoreConfig);
+                    
                     BrokerPathConfigHelper.setBrokerConfigPath(file);
 
                     System.out.println("load config properties file OK, " + file);
@@ -221,7 +225,8 @@ public class BrokerStartup {
                     brokerConfig, //
                     nettyServerConfig, //
                     nettyClientConfig, //
-                    messageStoreConfig);
+                    messageStoreConfig,
+                    jdbcTransactionStoreConfig);
             boolean initResult = controller.initialize();
             if (!initResult) {
                 controller.shutdown();

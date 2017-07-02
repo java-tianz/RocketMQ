@@ -24,7 +24,7 @@
     <property name="localeLanguage" value="en"/>
 
     <!--To configure the check to report on the first instance in each file-->
-    <module name="FileTabCharacter"/>
+    <!--  module name="FileTabCharacter"/-->
 
     <!-- header -->
     <module name="RegexpHeader">

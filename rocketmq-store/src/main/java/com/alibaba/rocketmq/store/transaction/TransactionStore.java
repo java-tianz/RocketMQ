@@ -15,7 +15,7 @@
  *  limitations under the License.
  */
 
-package com.alibaba.rocketmq.broker.transaction;
+package com.alibaba.rocketmq.store.transaction;
 
 import java.util.List;
 
@@ -23,24 +23,21 @@ import java.util.List;
 public interface TransactionStore {
     public boolean open();
 
-
     public void close();
 
+    public boolean put(final TransactionRecord transactionRecord);
 
     public boolean put(final List<TransactionRecord> trs);
 
+    public void remove(final Long offset);
 
     public void remove(final List<Long> pks);
 
-
     public List<TransactionRecord> traverse(final long pk, final int nums);
-
 
     public long totalRecords();
 
-
     public long minPK();
-
 
     public long maxPK();
 }

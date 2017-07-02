@@ -131,11 +131,11 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
                 return response;
             }
 
-            if (msgExt.getQueueOffset() != requestHeader.getTranStateTableOffset()) {
-                response.setCode(ResponseCode.SYSTEM_ERROR);
-                response.setRemark("the transaction state table offset wrong");
-                return response;
-            }
+//            if (msgExt.getQueueOffset() != requestHeader.getTranStateTableOffset()) {
+//                response.setCode(ResponseCode.SYSTEM_ERROR);
+//                response.setRemark("the transaction state table offset wrong");
+//                return response;
+//            }
 
             if (msgExt.getCommitLogOffset() != requestHeader.getCommitLogOffset()) {
                 response.setCode(ResponseCode.SYSTEM_ERROR);
@@ -145,8 +145,7 @@ public class EndTransactionProcessor implements NettyRequestProcessor {
 
             MessageExtBrokerInner msgInner = this.endMessageTransaction(msgExt);
             msgInner.setSysFlag(MessageSysFlag.resetTransactionValue(msgInner.getSysFlag(), requestHeader.getCommitOrRollback()));
-
-            msgInner.setQueueOffset(requestHeader.getTranStateTableOffset());
+//            msgInner.setQueueOffset(requestHeader.getTranStateTableOffset());
             msgInner.setPreparedTransactionOffset(requestHeader.getCommitLogOffset());
             msgInner.setStoreTimestamp(msgExt.getStoreTimestamp());
             if (MessageSysFlag.TransactionRollbackType == requestHeader.getCommitOrRollback()) {

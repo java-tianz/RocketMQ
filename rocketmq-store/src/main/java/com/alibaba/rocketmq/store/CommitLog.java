@@ -16,6 +16,17 @@
  */
 package com.alibaba.rocketmq.store;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.alibaba.rocketmq.common.ServiceThread;
 import com.alibaba.rocketmq.common.UtilAll;
 import com.alibaba.rocketmq.common.constant.LoggerName;
@@ -28,16 +39,6 @@ import com.alibaba.rocketmq.store.config.BrokerRole;
 import com.alibaba.rocketmq.store.config.FlushDiskType;
 import com.alibaba.rocketmq.store.ha.HAService;
 import com.alibaba.rocketmq.store.schedule.ScheduleMessageService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -281,6 +282,7 @@ public class CommitLog {
             long tagsCode = 0;
             String keys = "";
             String uniqKey = null;
+            String producerGroup = null;
 
             // 17 properties
             short propertiesLength = byteBuffer.getShort();
@@ -292,7 +294,9 @@ public class CommitLog {
                 keys = propertiesMap.get(MessageConst.PROPERTY_KEYS);
 
                 uniqKey = propertiesMap.get(MessageConst.PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX);
-
+                
+                producerGroup = propertiesMap.get(MessageConst.PROPERTY_PRODUCER_GROUP);
+                
                 String tags = propertiesMap.get(MessageConst.PROPERTY_TAGS);
                 if (tags != null && tags.length() > 0) {
                     tagsCode = MessageExtBrokerInner.tagsString2tagsCode(MessageExt.parseTopicFilterType(sysFlag), tags);
@@ -340,7 +344,8 @@ public class CommitLog {
                 keys, // 8
                 uniqKey, //9
                 sysFlag, // 9
-                preparedTransactionOffset// 10
+                preparedTransactionOffset, // 10
+                producerGroup // 11
             );
         } catch (Exception e) {
         }

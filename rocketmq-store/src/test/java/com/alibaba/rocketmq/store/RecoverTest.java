@@ -86,7 +86,7 @@ public class RecoverTest {
         messageStoreConfig.setMapedFileSizeConsumeQueue(100 * 20);
         messageStoreConfig.setMessageIndexEnable(false);
 
-        MessageStore messageStore = new DefaultMessageStore(messageStoreConfig, null, null, null);
+        MessageStore messageStore = new DefaultMessageStore(messageStoreConfig, null, null, null, null);
         if (first) {
             this.storeWrite1 = messageStore;
         } else {
@@ -130,7 +130,7 @@ public class RecoverTest {
         messageStoreConfig.setMapedFileSizeConsumeQueue(100 * 20);
         messageStoreConfig.setMessageIndexEnable(false);
 
-        storeRead = new DefaultMessageStore(messageStoreConfig, null, null, null);
+        storeRead = new DefaultMessageStore(messageStoreConfig, null, null, null, null);
 
         boolean loadResult = storeRead.load();
         assertTrue(loadResult);

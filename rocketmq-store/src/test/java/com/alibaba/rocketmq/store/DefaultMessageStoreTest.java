@@ -73,7 +73,7 @@ public class DefaultMessageStoreTest {
         messageStoreConfig.setMaxHashSlotNum(100);
         messageStoreConfig.setMaxIndexNum(100 * 10);
 
-        MessageStore master = new DefaultMessageStore(messageStoreConfig, null, null, null);
+        MessageStore master = new DefaultMessageStore(messageStoreConfig, null, null, null, null);
 
         boolean load = master.load();
         assertTrue(load);
@@ -141,7 +141,7 @@ public class DefaultMessageStoreTest {
 
         messageStoreConfig.setFlushDiskType(FlushDiskType.SYNC_FLUSH);
 
-        MessageStore master = new DefaultMessageStore(messageStoreConfig, null, null, null);
+        MessageStore master = new DefaultMessageStore(messageStoreConfig, null, null, null, null);
 
         boolean load = master.load();
         assertTrue(load);
