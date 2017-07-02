@@ -16,6 +16,8 @@
  */
 package transaction;
 
+import java.io.UnsupportedEncodingException;
+
 import com.alibaba.rocketmq.client.exception.MQClientException;
 import com.alibaba.rocketmq.client.producer.SendResult;
 import com.alibaba.rocketmq.client.producer.TransactionCheckListener;
@@ -23,14 +25,12 @@ import com.alibaba.rocketmq.client.producer.TransactionMQProducer;
 import com.alibaba.rocketmq.common.message.Message;
 import com.alibaba.rocketmq.remoting.common.RemotingHelper;
 
-import java.io.UnsupportedEncodingException;
-
 public class TransactionProducer {
     public static void main(String[] args) throws MQClientException, InterruptedException {
 
         TransactionCheckListener transactionCheckListener = new TransactionCheckListenerImpl();
         TransactionMQProducer producer = new TransactionMQProducer("please_rename_unique_group_name");
-        producer.setNamesrvAddr("192.168.0.179:9876");
+        producer.setNamesrvAddr("127.0.0.1:9876");
         producer.setCheckThreadPoolMinSize(2);
 
         producer.setCheckThreadPoolMaxSize(2);
@@ -41,14 +41,14 @@ public class TransactionProducer {
 
         String[] tags = new String[]{"TagA", "TagB", "TagC", "TagD", "TagE"};
         TransactionExecuterImpl tranExecuter = new TransactionExecuterImpl();
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 1; i++) {
             try {
                 Message msg =
-                        new Message("Topic_test1", tags[i % tags.length], /*"KEY" + i,*/
+                        new Message("Topic_test2", tags[i % tags.length], /*"KEY" + i,*/
                                 ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
                 SendResult sendResult = producer.sendMessageInTransaction(msg, tranExecuter, null);
                 System.out.println(sendResult);
-
+                
                 Thread.sleep(10);
             } catch (MQClientException e) {
                 e.printStackTrace();
@@ -62,6 +62,7 @@ public class TransactionProducer {
 //        }
 //
 //        producer.shutdown();
-
     }
+    
+    
 }

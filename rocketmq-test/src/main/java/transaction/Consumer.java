@@ -14,10 +14,10 @@ import com.alibaba.rocketmq.common.message.MessageExt;
 public class Consumer {
 	  public static void main(String[] args) throws InterruptedException, MQClientException {
 	        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("YOUR_CONSUMER_GROUP3");
-	        consumer.setNamesrvAddr("192.168.0.179:9876");
+	        consumer.setNamesrvAddr("127.0.0.1:9876");
 	        //consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_TIMESTAMP);
 //	        consumer.setConsumeMessageBatchMaxSize(10);
-	        consumer.subscribe("Topic_test1", "*");
+	        consumer.subscribe("Topic_test2", "*");
 	        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	        consumer.registerMessageListener(new MessageListenerConcurrently() {
 	            public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs,
