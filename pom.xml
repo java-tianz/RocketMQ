@@ -50,6 +50,7 @@
         <module>rocketmq-example</module>
         <module>rocketmq-filtersrv</module>
         <module>rocketmq-srvutil</module>
+		<module>rocketmq-test</module>
     </modules>
 
     <developers>
