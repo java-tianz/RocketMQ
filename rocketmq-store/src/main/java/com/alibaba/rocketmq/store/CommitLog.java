@@ -247,6 +247,7 @@ public class CommitLog {
             // 11 STORETIMESTAMP
             long storeTimestamp = byteBuffer.getLong();
 
+            // 12 STOREHOSTADDRESS
             ByteBuffer byteBuffer2 = byteBuffer.get(bytesContent, 0, 8);
 
             // 13 RECONSUMETIMES
