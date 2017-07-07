@@ -17,9 +17,8 @@
 
 package com.alibaba.rocketmq.store.transaction.jdbc;
 
-import java.net.URL;
+import java.beans.PropertyVetoException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -29,81 +28,95 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.rocketmq.common.MixAll;
 import com.alibaba.rocketmq.common.constant.LoggerName;
 import com.alibaba.rocketmq.store.transaction.TransactionRecord;
 import com.alibaba.rocketmq.store.transaction.TransactionStore;
+import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 
+/**
+ * 目前的逻辑里面，本类中的sql操作方法均是在单线程环境下运行，因此不存在线程安全问题，故而数据库连接池活跃数量配置为2，方便备用
+ * @author Administrator
+ *
+ */
 public class JDBCTransactionStore implements TransactionStore {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.TransactionLoggerName);
+    private static ComboPooledDataSource dataSource;
     private final JDBCTransactionStoreConfig jdbcTransactionStoreConfig;
-    private Connection connection;
     private AtomicLong totalRecordsValue = new AtomicLong(0);
-
-
-    public JDBCTransactionStore(JDBCTransactionStoreConfig jdbcTransactionStoreConfig) {
+    private String brokerName;
+    private String tableName; //每个主节点broker各自创建一张独立的事务表，因为offset只是在broker内部唯一
+    private String insertSql;
+    private String deleteSql;
+    private String selectSql;
+    private String countSql;
+    
+    public JDBCTransactionStore(JDBCTransactionStoreConfig jdbcTransactionStoreConfig, String brokerName) {
         this.jdbcTransactionStoreConfig = jdbcTransactionStoreConfig;
+    	this.brokerName = brokerName;
+    	this.tableName = "rocketmq_" + brokerName + "_transaction";
+    	this.tableName = this.tableName.replaceAll("-", "_"); // 这里特别注意两个主节点的名称不能重复，并且不能有-、_这样的混淆，这样也会重复的，导致一些不可预测的问题发生
+    	this.insertSql = "insert into " + this.tableName + " values (?, ?, ?)";
+    	this.deleteSql = "delete from " + this.tableName + " where offset = ?";
+    	this.selectSql = "select * from " + this.tableName + " where createTime < NOW() - INTERVAL 30 SECOND";
+    	this.countSql = "select count(offset) as total from " + this.tableName;
     }
 
+    private Connection getConnection() throws SQLException{
+    	return dataSource.getConnection();
+    }
+    
     @Override
     public boolean open() {
-        if (this.loadDriver()) {
-            Properties props = new Properties();
-            props.put("user", jdbcTransactionStoreConfig.getJdbcUser());
-            props.put("password", jdbcTransactionStoreConfig.getJdbcPassword());
-
-            try {
-                this.connection =
-                        DriverManager.getConnection(this.jdbcTransactionStoreConfig.getJdbcURL(), props);
-                
-                if (!this.computeTotalRecords()) {
-                    return this.createDB();
-                }
-
-                return true;
-            } catch (SQLException e) {
-                log.info("Create JDBC Connection Exeption", e);
-            }
+        loadDriver();
+        
+        if (!this.computeTotalRecords()) {
+            return this.createDB();
         }
-
-        return false;
+        
+        return true;
     }
-
-    private boolean loadDriver() {
-        try {
-            Class.forName(this.jdbcTransactionStoreConfig.getJdbcDriverClass()).newInstance();
-            log.info("Loaded the appropriate driver, {}",
-                    this.jdbcTransactionStoreConfig.getJdbcDriverClass());
-            return true;
-        } catch (Exception e) {
-            log.info("Loaded the appropriate driver Exception", e);
-        }
-
-        return false;
+    
+    private void loadDriver() {
+    	try {
+    		dataSource = new ComboPooledDataSource();
+			dataSource.setDriverClass(jdbcTransactionStoreConfig.getJdbcDriverClass());
+		} catch (PropertyVetoException e) {
+			e.printStackTrace();
+			throw new RuntimeException("jdbc数据源初始化失败", e);
+		}
+		dataSource.setJdbcUrl(jdbcTransactionStoreConfig.getJdbcURL());
+		dataSource.setUser(jdbcTransactionStoreConfig.getJdbcUser());
+		dataSource.setPassword(jdbcTransactionStoreConfig.getJdbcPassword());
+		dataSource.setMaxPoolSize(jdbcTransactionStoreConfig.getMaxPoolSize());
+		dataSource.setMinPoolSize(jdbcTransactionStoreConfig.getMinPoolSize());
+		dataSource.setInitialPoolSize(jdbcTransactionStoreConfig.getInitialPoolSize());
+		dataSource.setAcquireIncrement(jdbcTransactionStoreConfig.getAcquireIncrement());
+		dataSource.setAutomaticTestTable(jdbcTransactionStoreConfig.getAutomaticTestTable());
     }
-
+    
     private boolean computeTotalRecords() {
         Statement statement = null;
         ResultSet resultSet = null;
+        Connection connection = null;
         try {
-            statement = this.connection.createStatement();
-            resultSet = statement.executeQuery("select count(offset) as total from t_transaction");
-            if (!resultSet.next()) {
-                log.warn("computeTotalRecords ResultSet is empty");
-                return false;
+        	connection = getConnection();
+        	connection.setAutoCommit(true);
+        	statement = connection.createStatement();
+            resultSet = statement.executeQuery(this.countSql);
+            if (resultSet.next()) {
+            	this.totalRecordsValue.set(resultSet.getLong(1));
             }
             
-            this.totalRecordsValue.set(resultSet.getLong(1));
+            return true;
         } catch (Exception e) {
-            log.warn("computeTotalRecords Exception", e);
+            log.error("computeTotalRecords Exception", e);
             return false;
         } finally {
             if (null != statement) {
@@ -112,30 +125,37 @@ public class JDBCTransactionStore implements TransactionStore {
                 } catch (SQLException e) {
                 }
             }
-
+            
             if (null != resultSet) {
                 try {
                     resultSet.close();
                 } catch (SQLException e) {
                 }
             }
+            
+            if(connection != null){
+            	try {
+					connection.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+            }
         }
-
-        return true;
     }
 
     private boolean createDB() {
         Statement statement = null;
+        Connection connection = null;
         try {
-            this.connection.setAutoCommit(false);
-            statement = this.connection.createStatement();
+        	connection = getConnection();
+        	connection.setAutoCommit(true);
+            statement = connection.createStatement();
             String sql = this.createTableSql();
             log.info("createDB SQL:\n {}", sql);
             statement.execute(sql);
-            this.connection.commit();
             return true;
         } catch (Exception e) {
-            log.warn("createDB Exception", e);
+            log.error("createDB Exception", e);
             return false;
         } finally {
             if (null != statement) {
@@ -145,40 +165,46 @@ public class JDBCTransactionStore implements TransactionStore {
                     log.warn("Close statement exception", e);
                 }
             }
+            
+            if (null != connection) {
+                try {
+                	connection.close();
+                } catch (SQLException e) {
+                    log.warn("Close connection exception", e);
+                }
+            }
         }
     }
 
     private String createTableSql() {
-        URL resource = JDBCTransactionStore.class.getClassLoader().getResource("transaction.sql");
-        String fileContent = MixAll.file2String(resource);
+        String fileContent = "CREATE TABLE " + this.tableName + " ( `offset` bigint(20) NOT NULL, `producerGroup` varchar(64) DEFAULT NULL, `createTime` datetime DEFAULT NULL, PRIMARY KEY (`offset`) ) ENGINE=InnoDB DEFAULT CHARSET=utf8";
         return fileContent;
     }
-
+    
     @Override
     public void close() {
-        try {
-            if (this.connection != null) {
-                this.connection.close();
-            }
-        } catch (SQLException e) {
-        }
+    	if(dataSource != null){
+        	dataSource.close();
+    	}
     }
     
     @Override
     public boolean put(final TransactionRecord transactionRecord) {
         PreparedStatement statement = null;
+        Connection connection = null;
         try {
-            this.connection.setAutoCommit(false);
-            statement = this.connection.prepareStatement("insert into t_transaction values (?, ?, ?)");
+        	connection = getConnection();
+            connection.setAutoCommit(false);
+            statement = connection.prepareStatement(this.insertSql);
             statement.setLong(1, transactionRecord.getOffset());
             statement.setString(2, transactionRecord.getProducerGroup());
             statement.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
             int num = statement.executeUpdate();
-            this.connection.commit();
+            connection.commit();
             this.totalRecordsValue.addAndGet(num);
             return true;
         } catch (Exception e) {
-            log.warn("createDB Exception", e);
+            log.error("put transactionRecord Exception", e);
             return false;
         } finally {
             if (null != statement) {
@@ -186,6 +212,14 @@ public class JDBCTransactionStore implements TransactionStore {
                     statement.close();
                 } catch (SQLException e) {
                     log.warn("Close statement exception", e);
+                }
+            }
+            
+            if (null != connection) {
+                try {
+                	connection.close();
+                } catch (SQLException e) {
+                    log.warn("Close connection exception", e);
                 }
             }
         }
@@ -194,9 +228,11 @@ public class JDBCTransactionStore implements TransactionStore {
     @Override
     public boolean put(final List<TransactionRecord> trs) {
         PreparedStatement statement = null;
+        Connection connection = null;
         try {
-            this.connection.setAutoCommit(false);
-            statement = this.connection.prepareStatement("insert into t_transaction values (?, ?, ?)");
+        	connection = getConnection();
+            connection.setAutoCommit(false);
+            statement = connection.prepareStatement(this.insertSql);
             for (TransactionRecord tr : trs) {
                 statement.setLong(1, tr.getOffset());
                 statement.setString(2, tr.getProducerGroup());
@@ -204,11 +240,11 @@ public class JDBCTransactionStore implements TransactionStore {
                 statement.addBatch();
             }
             int[] executeBatch = statement.executeBatch();
-            this.connection.commit();
+            connection.commit();
             this.totalRecordsValue.addAndGet(updatedRows(executeBatch));
             return true;
         } catch (Exception e) {
-            log.warn("createDB Exception", e);
+            log.error("put transactionRecord list Exception", e);
             return false;
         } finally {
             if (null != statement) {
@@ -218,9 +254,17 @@ public class JDBCTransactionStore implements TransactionStore {
                     log.warn("Close statement exception", e);
                 }
             }
+            
+            if (null != connection) {
+                try {
+                	connection.close();
+                } catch (SQLException e) {
+                    log.warn("Close connection exception", e);
+                }
+            }
         }
     }
-
+    
     private long updatedRows(int[] rows) {
         long res = 0;
         for (int i : rows) {
@@ -233,21 +277,30 @@ public class JDBCTransactionStore implements TransactionStore {
     @Override
     public void remove(final Long offset) {
         PreparedStatement statement = null;
+        Connection connection = null;
         try {
-            this.connection.setAutoCommit(false);
-            statement = this.connection.prepareStatement("DELETE FROM t_transaction WHERE offset = ?");
+        	connection = getConnection();
+            connection.setAutoCommit(false);
+            statement = connection.prepareStatement(deleteSql);
             statement.setLong(1, offset);
             int num = statement.executeUpdate();
-//            System.out.println(num);
-            this.connection.commit();
+            connection.commit();
             this.totalRecordsValue.addAndGet(0 - num);
         } catch (Exception e) {
-            log.warn("remove by offset Exception", e);
+            log.error("remove by offset Exception", e);
         } finally {
             if (null != statement) {
                 try {
                     statement.close();
                 } catch (SQLException e) {
+                }
+            }
+            
+            if (null != connection) {
+                try {
+                	connection.close();
+                } catch (SQLException e) {
+                    log.warn("Close connection exception", e);
                 }
             }
         }
@@ -256,24 +309,33 @@ public class JDBCTransactionStore implements TransactionStore {
     @Override
     public void remove(final List<Long> pks) {
         PreparedStatement statement = null;
+        Connection connection = null;
         try {
-            this.connection.setAutoCommit(false);
-            statement = this.connection.prepareStatement("DELETE FROM t_transaction WHERE offset = ?");
+        	connection = getConnection();
+            connection.setAutoCommit(false);
+            statement = connection.prepareStatement(deleteSql);
             for (long pk : pks) {
                 statement.setLong(1, pk);
                 statement.addBatch();
             }
             int[] executeBatch = statement.executeBatch();
-//            System.out.println(Arrays.toString(executeBatch));
-            this.connection.commit();
+            connection.commit();
             this.totalRecordsValue.addAndGet(0 - updatedRows(executeBatch));
         } catch (Exception e) {
-            log.warn("createDB Exception", e);
+            log.error("remove by offset list Exception", e);
         } finally {
             if (null != statement) {
                 try {
                     statement.close();
                 } catch (SQLException e) {
+                }
+            }
+            
+            if (null != connection) {
+                try {
+                	connection.close();
+                } catch (SQLException e) {
+                    log.warn("Close connection exception", e);
                 }
             }
         }
@@ -300,43 +362,51 @@ public class JDBCTransactionStore implements TransactionStore {
     }
     
     public Map<String, Set<Long>> getLaggedTransaction() {
-        if (null != connection) {
-            Statement statement = null;
-            ResultSet resultSet = null;
-            try {
-            	connection.setAutoCommit(true);
-                statement = connection.createStatement();
-                resultSet = statement.executeQuery("SELECT * FROM t_transaction WHERE createTime < NOW() - INTERVAL 30 SECOND");
-                Map<String, Set<Long>> result = new HashMap<String, Set<Long>>();
-                while (resultSet.next()) {
-                    String producerGroup = resultSet.getString("producerGroup");
-                    if (result.containsKey(producerGroup)) {
-                        result.get(producerGroup).add(resultSet.getLong("offset"));
-                    } else {
-                        Set<Long> offsets = new HashSet<Long>();
-                        result.put(producerGroup, offsets);
-                        offsets.add(resultSet.getLong("offset"));
-                    }
+        Statement statement = null;
+        ResultSet resultSet = null;
+        Connection connection = null;
+        try {
+        	connection = getConnection();
+        	connection.setAutoCommit(true);
+            statement = connection.createStatement();
+            resultSet = statement.executeQuery(this.selectSql);
+            Map<String, Set<Long>> result = new HashMap<String, Set<Long>>();
+            while (resultSet.next()) {
+                String producerGroup = resultSet.getString("producerGroup");
+                if (result.containsKey(producerGroup)) {
+                    result.get(producerGroup).add(resultSet.getLong("offset"));
+                } else {
+                    Set<Long> offsets = new HashSet<Long>();
+                    result.put(producerGroup, offsets);
+                    offsets.add(resultSet.getLong("offset"));
                 }
-                
-                return result;
-            } catch (SQLException e) {
-                log.error("Failed to getLaggedTransaction statement.", e);
-            } finally {
-            	if (null != statement) {
-                    try {
-                        statement.close();
-                    } catch (SQLException e) {
-                        log.warn("Close statement exception", e);
-                    }
+            }
+            
+            return result;
+        } catch (SQLException e) {
+            log.error("Failed to getLaggedTransaction statement.", e);
+        } finally {
+        	if (null != statement) {
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                    log.warn("Close statement exception", e);
                 }
-            	
-            	if (null != resultSet) {
-                    try {
-                        resultSet.close();
-                    } catch (SQLException e) {
-                    	log.warn("Close resultSet exception", e);
-                    }
+            }
+        	
+        	if (null != resultSet) {
+                try {
+                    resultSet.close();
+                } catch (SQLException e) {
+                	log.warn("Close resultSet exception", e);
+                }
+            }
+        	
+        	if (null != connection) {
+                try {
+                	connection.close();
+                } catch (SQLException e) {
+                    log.warn("Close connection exception", e);
                 }
             }
         }

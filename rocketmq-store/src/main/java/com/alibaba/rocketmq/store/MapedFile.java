@@ -62,9 +62,9 @@ public class MapedFile extends ReferenceResource {
 
     private final MappedByteBuffer mappedByteBuffer;
 
-    private final AtomicInteger wrotePostion = new AtomicInteger(0);
+    private final AtomicInteger wrotePostion = new AtomicInteger(0); //内存buffer中当前写位置
 
-    private final AtomicInteger committedPosition = new AtomicInteger(0);
+    private final AtomicInteger committedPosition = new AtomicInteger(0); //已经向磁盘完成提交写的位置，可以认为是物理写位置
 
     private FileChannel fileChannel;
 

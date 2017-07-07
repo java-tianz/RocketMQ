@@ -38,7 +38,7 @@ public class JDBCTransactionStoreTest {
         config.setJdbcURL("jdbc:derby:xxx;create=true");
         config.setJdbcUser("xxx");
         config.setJdbcPassword("xxx");
-        TransactionStore store = new JDBCTransactionStore(config);
+        TransactionStore store = new JDBCTransactionStore(config, null);
 
         boolean open = store.open();
         System.out.println(open);
@@ -51,7 +51,7 @@ public class JDBCTransactionStoreTest {
     public void test_mysql_open() {
         JDBCTransactionStoreConfig config = new JDBCTransactionStoreConfig();
 
-        TransactionStore store = new JDBCTransactionStore(config);
+        TransactionStore store = new JDBCTransactionStore(config, null);
 
         boolean open = store.open();
         System.out.println(open);
@@ -64,7 +64,7 @@ public class JDBCTransactionStoreTest {
     public void test_mysql_put() {
         JDBCTransactionStoreConfig config = new JDBCTransactionStoreConfig();
 
-        TransactionStore store = new JDBCTransactionStore(config);
+        TransactionStore store = new JDBCTransactionStore(config, null);
 
         boolean open = store.open();
         System.out.println(open);
@@ -93,7 +93,7 @@ public class JDBCTransactionStoreTest {
     public void test_mysql_remove() {
         JDBCTransactionStoreConfig config = new JDBCTransactionStoreConfig();
 
-        TransactionStore store = new JDBCTransactionStore(config);
+        TransactionStore store = new JDBCTransactionStore(config, null);
 
         boolean open = store.open();
         System.out.println(open);

@@ -33,19 +33,19 @@ public class TransactionCheckListenerImpl implements TransactionCheckListener {
     public LocalTransactionState checkLocalTransactionState(MessageExt msg) {
     	String str = "检测到本地事务状态为：未知";
         int value = transactionIndex.getAndIncrement();
-        if ((value % 6) == 0) {
-            System.out.println("当前时间：" + sdf.format(new Date()) + ", 检测事务状态异常, 消息详情为：" + msg.toString());
-            throw new RuntimeException("Could not find db");
-        } else if ((value % 2) == 0) {
-        	str = "检测到本地事务状态为：回滚";
-            System.out.println("当前时间：" + sdf.format(new Date()) + ", " + str + ", 消息详情为：" + msg.toString());
-            return LocalTransactionState.ROLLBACK_MESSAGE;
-        } else if ((value % 3) == 0) {
+//        if ((value % 6) == 0) {
+//            System.out.println("当前时间：" + sdf.format(new Date()) + ", 检测事务状态异常, 消息详情为：" + msg.toString());
+//            throw new RuntimeException("Could not find db");
+//        } else if ((value % 3) == 0) {
+//        	str = "检测到本地事务状态为：回滚";
+//            System.out.println("当前时间：" + sdf.format(new Date()) + ", " + str + ", 消息详情为：" + msg.toString());
+//            return LocalTransactionState.ROLLBACK_MESSAGE;
+//        } else if ((value % 2) == 0) {
         	str = "检测到本地事务状态为：提交";
             System.out.println("当前时间：" + sdf.format(new Date()) + ", " + str + ", 消息详情为：" + msg.toString());
             return LocalTransactionState.COMMIT_MESSAGE;
-        }
-        System.out.println("当前时间：" + sdf.format(new Date()) + ", " + str + ", 消息详情为：" + msg.toString());
-        return LocalTransactionState.UNKNOW;
+//        }
+//        System.out.println("当前时间：" + sdf.format(new Date()) + ", " + str + ", 消息详情为：" + msg.toString());
+//        return LocalTransactionState.UNKNOW;
     }
 }

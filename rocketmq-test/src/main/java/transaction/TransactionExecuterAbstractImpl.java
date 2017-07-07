@@ -20,29 +20,38 @@ import com.alibaba.rocketmq.client.producer.LocalTransactionExecuter;
 import com.alibaba.rocketmq.client.producer.LocalTransactionState;
 import com.alibaba.rocketmq.common.message.Message;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class TransactionExecuterImpl implements LocalTransactionExecuter {
-    private AtomicInteger transactionIndex = new AtomicInteger(1);
-
+public abstract class TransactionExecuterAbstractImpl implements LocalTransactionExecuter {
 
     @Override
     public LocalTransactionState executeLocalTransactionBranch(final Message msg, final Object arg) {
-        int value = transactionIndex.getAndIncrement();
-        
-        System.out.println("value: " + value);
-        if (value == 0) {
-        	 System.out.println("本地事务分支异常");
-            throw new RuntimeException("Could not find db");
-        } else if ((value % 5) == 0) {
-        	System.out.println("消息回滚。。。");
-            return LocalTransactionState.ROLLBACK_MESSAGE;
-        } else if ((value % 4) == 0) {
-        	System.out.println("消息提交。。。");
-            return LocalTransactionState.COMMIT_MESSAGE;
-        }
-
-        System.out.println("消息未知状态。。。");
-        return LocalTransactionState.UNKNOW;
+		doLocalTransactionBranchCode(); // 执行业务代码
+    	
+    	saveLocalTransactionBranchState(); //保存本地事务状态
+    	
+    	return LocalTransactionState.COMMIT_MESSAGE;
+    	
+    	
+//        int value = transactionIndex.getAndIncrement();
+//        
+//        System.out.println("value: " + value);
+//        if (value == 0) {
+//        	 System.out.println("本地事务分支异常");
+//            throw new RuntimeException("Could not find db");
+//        } else if ((value % 5) == 0) {
+//        	System.out.println("消息回滚。。。");
+//            return LocalTransactionState.ROLLBACK_MESSAGE;
+//        } else if ((value % 4) == 0) {
+//        	System.out.println("消息提交。。。");
+//            return LocalTransactionState.COMMIT_MESSAGE;
+//        }
+//
+//        System.out.println("消息未知状态。。。");
+//        return LocalTransactionState.UNKNOW;
     }
+
+    protected abstract void saveLocalTransactionBranchState();
+
+	protected void doLocalTransactionBranchCode() {
+		
+	}
 }

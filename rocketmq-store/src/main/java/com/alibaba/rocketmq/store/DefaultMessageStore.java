@@ -1309,23 +1309,28 @@ public class DefaultMessageStore implements MessageStore {
 
     public void doDispatch(DispatchRequest req) {
         final int tranType = MessageSysFlag.getTransactionValue(req.getSysFlag());
+        boolean isMaster = BrokerRole.SLAVE != messageStoreConfig.getBrokerRole(); // 从节点不需要做分布式事务相关的处理
         switch (tranType) {
             case MessageSysFlag.TransactionNotType:
             case MessageSysFlag.TransactionCommitType:
                 DefaultMessageStore.this.putMessagePostionInfo(req.getTopic(), req.getQueueId(), req.getCommitLogOffset(), req.getMsgSize(),
                         req.getTagsCode(), req.getStoreTimestamp(), req.getConsumeQueueOffset());
-                if(tranType == MessageSysFlag.TransactionCommitType){
+                if(isMaster && tranType == MessageSysFlag.TransactionCommitType){
                 	//提交成功，将消息从事务状态表中删除，不再做回查了
                 	jdbcTransactionStore.remove(req.getPreparedTransactionOffset());
                 }
                 break;
             case MessageSysFlag.TransactionPreparedType:
-            	//将消息加入事务状态表，以便于broker进行会查
-            	jdbcTransactionStore.put(new TransactionRecord(req.getCommitLogOffset(), req.getProducerGroup()));
+            	if(isMaster){
+            		//将消息加入事务状态表，以便于broker进行会查
+            		jdbcTransactionStore.put(new TransactionRecord(req.getCommitLogOffset(), req.getProducerGroup()));
+            	}
             	break;
             case MessageSysFlag.TransactionRollbackType:
-            	//回滚成功，将消息从事务状态表中删除，不再做回查了
-            	jdbcTransactionStore.remove(req.getPreparedTransactionOffset());
+            	if(isMaster){
+            		//回滚成功，将消息从事务状态表中删除，不再做回查了
+            		jdbcTransactionStore.remove(req.getPreparedTransactionOffset());
+            	}
                 break;
         }
 

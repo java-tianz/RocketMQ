@@ -45,11 +45,13 @@ public class DefaultTransactionStateChecker implements TransactionStateChecker {
             LOGGER.info("No lagged transactions found.");
             return;
         } else {
-            LOGGER.info("Lagged transactions found");
+            LOGGER.info("Lagged transactions found: {}", laggedTransaction);
         }
 
         for (final Map.Entry<String, Set<Long>> next : laggedTransaction.entrySet()) {
             Set<Long> offsets = next.getValue();
+            final String producerGroup = next.getKey();
+            //LOGGER.info("Lagged transactions handling, ");
             for (final Long offset : offsets) {
                 Runnable runnable = new Runnable() {
                     @Override
@@ -57,7 +59,7 @@ public class DefaultTransactionStateChecker implements TransactionStateChecker {
                         try {
                             // Choose a producer to callback.
                             ClientChannelInfo clientChannelInfo = brokerController.getProducerManager()
-                                    .pickProducerChannelRandomly(next.getKey());
+                                    .pickProducerChannelRandomly(producerGroup);
                             if (clientChannelInfo == null) {
                                 LOGGER.warn("No online producer instances of {} is found.", next.getKey());
                                 return;

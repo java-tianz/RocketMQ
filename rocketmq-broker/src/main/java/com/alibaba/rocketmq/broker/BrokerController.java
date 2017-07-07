@@ -140,8 +140,8 @@ public class BrokerController {
     
     private JDBCTransactionStoreConfig jdbcTransactionStoreConfig;
     private JDBCTransactionStore jdbcTransactionStore;
-    private final TransactionStateChecker transactionStateChecker;
-    private final ScheduledExecutorService checkTransactionStateExecutorService;
+    private TransactionStateChecker transactionStateChecker;
+    private ScheduledExecutorService checkTransactionStateExecutorService;
     
     public BrokerController(//
                             final BrokerConfig brokerConfig, //
@@ -186,11 +186,7 @@ public class BrokerController {
 
         this.brokerFastFailure = new BrokerFastFailure(this);
         
-        this.jdbcTransactionStore = new JDBCTransactionStore(jdbcTransactionStoreConfig);
-        this.transactionStateChecker = new DefaultTransactionStateChecker(this);
-
-        checkTransactionStateExecutorService = Executors.newScheduledThreadPool(brokerConfig.getBroker2ClientThreadPoolNums(),
-                new ThreadFactoryImpl("Broker2ClientService_"));
+        this.jdbcTransactionStore = new JDBCTransactionStore(jdbcTransactionStoreConfig, getBrokerConfig().getBrokerName());
     }
 
     public BrokerConfig getBrokerConfig() {
@@ -211,7 +207,9 @@ public class BrokerController {
         result = result && this.topicConfigManager.load();
         result = result && this.consumerOffsetManager.load();
         result = result && this.subscriptionGroupManager.load();
-        result = result && this.jdbcTransactionStore.open();
+        if (BrokerRole.SLAVE != this.messageStoreConfig.getBrokerRole()) { //主节点才需要加载这个
+        	result = result && this.jdbcTransactionStore.open();
+        }
         
         if (result) {
             try {
@@ -358,6 +356,8 @@ public class BrokerController {
                     }
                 }, 1000 * 10, 1000 * 60, TimeUnit.MILLISECONDS);
             } else {
+                this.transactionStateChecker = new DefaultTransactionStateChecker(this);
+                this.checkTransactionStateExecutorService = Executors.newScheduledThreadPool(brokerConfig.getBroker2ClientThreadPoolNums(), new ThreadFactoryImpl("Broker2ClientService_"));
             	this.checkTransactionStateExecutorService.scheduleAtFixedRate(new Runnable() {
                     @Override
                     public void run() {
