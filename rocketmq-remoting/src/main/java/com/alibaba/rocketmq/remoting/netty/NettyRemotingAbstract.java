@@ -16,6 +16,22 @@
  */
 package com.alibaba.rocketmq.remoting.netty;
 
+import java.net.SocketAddress;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.alibaba.rocketmq.remoting.ChannelEventListener;
 import com.alibaba.rocketmq.remoting.InvokeCallback;
 import com.alibaba.rocketmq.remoting.RPCHook;
@@ -28,20 +44,11 @@ import com.alibaba.rocketmq.remoting.exception.RemotingTimeoutException;
 import com.alibaba.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
 import com.alibaba.rocketmq.remoting.protocol.RemotingSysResponseCode;
+
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.net.SocketAddress;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.concurrent.*;
 
 
 /**
@@ -95,6 +102,7 @@ public abstract class NettyRemotingAbstract {
     }
 
     public void processRequestCommand(final ChannelHandlerContext ctx, final RemotingCommand cmd) {
+    	System.out.println("processRequestCommand当前线程为：" + Thread.currentThread().getName() + ", ctx = " + ctx);
         final Pair<NettyRequestProcessor, ExecutorService> matched = this.processorTable.get(cmd.getCode());
         final Pair<NettyRequestProcessor, ExecutorService> pair = null == matched ? this.defaultRequestProcessor : matched;
         final int opaque = cmd.getOpaque();
@@ -119,7 +127,8 @@ public abstract class NettyRemotingAbstract {
                                 response.setOpaque(opaque);
                                 response.markResponseType();
                                 try {
-                                    ctx.writeAndFlush(response);
+                                    ctx.writeAndFlush(response); //这里不一定是在当前ctx里面就开始写，一般是向前寻找最近的一个出站handler的ctx，然后调用该ctx对应出站handler,调用其write方法，此处也将间接完成了业务线程到IO事件处理线程的切换
+                        			System.out.println("---------------------[" + Thread.currentThread().getName() + "]ctx.writeAndFlush(response)正在回写...");
                                 } catch (Throwable e) {
                                     plog.error("process request over, but response failed", e);
                                     plog.error(cmd.toString());
@@ -183,8 +192,19 @@ public abstract class NettyRemotingAbstract {
     }
 
     public void processResponseCommand(ChannelHandlerContext ctx, RemotingCommand cmd) {
+    	String x = "processResponseCommand|当前线程为：" + Thread.currentThread().getName() + "code=" + cmd.getCode() + ", 地址：" + ctx.channel(); 
+    	//+ ", 调用堆栈为：";
+//    	StackTraceElement[] arr = Thread.currentThread().getStackTrace();
+//    	for (int i = 0; i < arr.length; i++) {
+//			x += arr[i] + "\r\n";
+//		}
+    	System.out.println( x );
+    	 
         final int opaque = cmd.getOpaque();
+    	System.out.println("processResponseCommand|opaque=" + opaque);
         final ResponseFuture responseFuture = responseTable.get(opaque);
+    	System.out.println("processResponseCommand|responseFuture=" + responseFuture);
+    	
         if (responseFuture != null) {
             responseFuture.setResponseCommand(cmd);
 
@@ -262,15 +282,17 @@ public abstract class NettyRemotingAbstract {
     public RemotingCommand invokeSyncImpl(final Channel channel, final RemotingCommand request, final long timeoutMillis)
             throws InterruptedException, RemotingSendRequestException, RemotingTimeoutException {
         final int opaque = request.getOpaque();
-
+        System.out.println("invokeSyncImpl.opaque=" + opaque);
         try {
             final ResponseFuture responseFuture = new ResponseFuture(opaque, timeoutMillis, null, null);
             this.responseTable.put(opaque, responseFuture);
             final SocketAddress addr = channel.remoteAddress();
+            System.out.println("发消息线程：" + Thread.currentThread().getName());
             channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture f) throws Exception {
                     if (f.isSuccess()) {
+                        System.out.println("发消息成功回调线程：" + Thread.currentThread().getName());
                         responseFuture.setSendRequestOK(true);
                         return;
                     } else {

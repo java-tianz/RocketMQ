@@ -56,6 +56,7 @@ public class JDBCTransactionStore implements TransactionStore {
     private String deleteSql;
     private String selectSql;
     private String countSql;
+    private boolean transactionEnable = false; //事务功能是否启用
     
     public JDBCTransactionStore(JDBCTransactionStoreConfig jdbcTransactionStoreConfig, String brokerName) {
         this.jdbcTransactionStoreConfig = jdbcTransactionStoreConfig;
@@ -80,6 +81,7 @@ public class JDBCTransactionStore implements TransactionStore {
             return this.createDB();
         }
         
+        transactionEnable = true;
         return true;
     }
     
@@ -190,6 +192,10 @@ public class JDBCTransactionStore implements TransactionStore {
     
     @Override
     public boolean put(final TransactionRecord transactionRecord) {
+    	if(!transactionEnable){
+    		return false;
+    	}
+    	
         PreparedStatement statement = null;
         Connection connection = null;
         try {
@@ -227,6 +233,10 @@ public class JDBCTransactionStore implements TransactionStore {
 
     @Override
     public boolean put(final List<TransactionRecord> trs) {
+    	if(!transactionEnable){
+    		return false;
+    	}
+    	
         PreparedStatement statement = null;
         Connection connection = null;
         try {
@@ -276,6 +286,10 @@ public class JDBCTransactionStore implements TransactionStore {
 
     @Override
     public void remove(final Long offset) {
+    	if(!transactionEnable){
+    		return;
+    	}
+    	
         PreparedStatement statement = null;
         Connection connection = null;
         try {
@@ -308,6 +322,10 @@ public class JDBCTransactionStore implements TransactionStore {
     
     @Override
     public void remove(final List<Long> pks) {
+    	if(!transactionEnable){
+    		return;
+    	}
+    	
         PreparedStatement statement = null;
         Connection connection = null;
         try {
@@ -362,6 +380,10 @@ public class JDBCTransactionStore implements TransactionStore {
     }
     
     public Map<String, Set<Long>> getLaggedTransaction() {
+    	if(!transactionEnable){
+    		return null;
+    	}
+    	
         Statement statement = null;
         ResultSet resultSet = null;
         Connection connection = null;

@@ -451,6 +451,15 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 
                 if (createNewConnection) {
                     ChannelFuture channelFuture = this.bootstrap.connect(RemotingHelper.string2SocketAddress(addr));
+                    
+//                    .addListener(new ChannelFutureListener() {
+//                        @Override
+//                        public void operationComplete(ChannelFuture future) throws Exception {
+//                        	System.out.println("线程" + Thread.currentThread().getName() + ": 连接成功," + new Date());
+//                        }
+//                    }).sync();
+//                	System.out.println("线程" + Thread.currentThread().getName() + ": 连接后代码," + new Date());
+                    
                     log.info("createChannel: begin to connect remote host[{}] asynchronously", addr);
                     cw = new ChannelWrapper(channelFuture);
                     this.channelTables.put(addr, cw);

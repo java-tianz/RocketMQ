@@ -35,7 +35,7 @@ import java.nio.ByteBuffer;
 public class NettyDecoder extends LengthFieldBasedFrameDecoder {
     private static final Logger log = LoggerFactory.getLogger(RemotingHelper.RemotingLogName);
     private static final int FRAME_MAX_LENGTH = //
-            Integer.parseInt(System.getProperty("com.rocketmq.remoting.frameMaxLength", "16777216"));
+            Integer.parseInt(System.getProperty("com.rocketmq.remoting.frameMaxLength", "16777216")); //16MB大小
 
 
     public NettyDecoder() {
@@ -45,6 +45,8 @@ public class NettyDecoder extends LengthFieldBasedFrameDecoder {
 
     @Override
     public Object decode(ChannelHandlerContext ctx, ByteBuf in) throws Exception {
+		System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyDecoder.decode解码处理开始...");
+
         ByteBuf frame = null;
         try {
             frame = (ByteBuf) super.decode(ctx, in);
@@ -54,6 +56,7 @@ public class NettyDecoder extends LengthFieldBasedFrameDecoder {
 
             ByteBuffer byteBuffer = frame.nioBuffer();
 
+    		System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyDecoder.decode解码处理完成...");
             return RemotingCommand.decode(byteBuffer);
         } catch (Exception e) {
             log.error("decode exception, " + RemotingHelper.parseChannelRemoteAddr(ctx.channel()), e);
@@ -66,4 +69,13 @@ public class NettyDecoder extends LengthFieldBasedFrameDecoder {
 
         return null;
     }
+    
+    @Override
+	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+		System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyDecoder.channelRead处理开始...");
+
+		super.channelRead(ctx, msg);
+		
+		System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyDecoder.channelRead处理完成...");
+	}
 }

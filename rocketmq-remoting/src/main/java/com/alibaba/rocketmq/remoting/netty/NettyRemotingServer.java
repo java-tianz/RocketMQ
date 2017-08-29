@@ -177,7 +177,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                                         defaultEventExecutorGroup, //
                                         new NettyEncoder(), //
                                         new NettyDecoder(), //
-                                        new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()), //
+                                        new IdleStateHandlerExt(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()), //
                                         new NettyConnetManageHandler(), //
                                         new NettyServerHandler());
                             }
@@ -210,6 +210,41 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 }
             }
         }, 1000 * 3, 1000);
+    }
+    
+    class IdleStateHandlerExt extends IdleStateHandler{
+
+		public IdleStateHandlerExt(int readerIdleTimeSeconds, int writerIdleTimeSeconds, int allIdleTimeSeconds) {
+			super(readerIdleTimeSeconds, writerIdleTimeSeconds, allIdleTimeSeconds);
+		}
+		
+		@Override
+		public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]IdleStateHandlerExt.write处理开始...");
+
+			super.write(ctx, msg, promise);
+
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]IdleStateHandlerExt.write处理完成...");
+		}
+
+		@Override
+		public void flush(ChannelHandlerContext ctx) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]IdleStateHandlerExt.flush处理开始...");
+
+			super.flush(ctx);
+
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]IdleStateHandlerExt.flush处理完成...");
+		}
+		
+		@Override
+		public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]IdleStateHandlerExt.channelRead处理开始...");
+			
+			super.channelRead(ctx, msg);
+			
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]IdleStateHandlerExt.channelRead处理完成...");
+		}
+    	
     }
 
     @Override
@@ -311,8 +346,21 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, RemotingCommand msg) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyServerHandler.channelRead0业务消息处理开始...");
+
             processMessageReceived(ctx, msg);
+            
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyServerHandler.channelRead0业务消息处理完成...");
         }
+        
+    	@Override
+		public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyServerHandler.channelRead处理开始...");
+			
+			super.channelRead(ctx, msg);
+			
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyServerHandler.channelRead处理完成...");
+		}
     }
 
     class NettyConnetManageHandler extends ChannelDuplexHandler {
@@ -321,6 +369,8 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             final String remoteAddress = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
             log.info("NETTY SERVER PIPELINE: channelRegistered {}", remoteAddress);
             super.channelRegistered(ctx);
+            
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.channelRegistered处理完成...");
         }
 
 
@@ -329,6 +379,8 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             final String remoteAddress = RemotingHelper.parseChannelRemoteAddr(ctx.channel());
             log.info("NETTY SERVER PIPELINE: channelUnregistered, the channel[{}]", remoteAddress);
             super.channelUnregistered(ctx);
+            
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.channelUnregistered处理完成...");
         }
 
 
@@ -341,6 +393,8 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             if (NettyRemotingServer.this.channelEventListener != null) {
                 NettyRemotingServer.this.putNettyEvent(new NettyEvent(NettyEventType.CONNECT, remoteAddress.toString(), ctx.channel()));
             }
+            
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.channelActive处理完成...");
         }
 
 
@@ -353,6 +407,8 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             if (NettyRemotingServer.this.channelEventListener != null) {
                 NettyRemotingServer.this.putNettyEvent(new NettyEvent(NettyEventType.CLOSE, remoteAddress.toString(), ctx.channel()));
             }
+            
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.channelInactive处理完成...");
         }
 
 
@@ -372,6 +428,8 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             }
 
             ctx.fireUserEventTriggered(evt);
+            
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.userEventTriggered处理完成...");
         }
 
 
@@ -387,5 +445,34 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
             RemotingUtil.closeChannel(ctx.channel());
         }
+        
+		@Override
+		public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.write处理开始...");
+			
+			super.write(ctx, msg, promise);
+			
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.write处理完成...");
+		}
+		
+		@Override
+		public void flush(ChannelHandlerContext ctx) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.flush处理开始...");
+			
+			super.flush(ctx);
+			
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.flush处理完成...");
+		}
+		
+		@Override
+		public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.channelRead处理开始...");
+			
+			super.channelRead(ctx, msg);
+			
+			System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyConnetManageHandler.channelRead处理完成...");
+		}
+		
+        
     }
 }

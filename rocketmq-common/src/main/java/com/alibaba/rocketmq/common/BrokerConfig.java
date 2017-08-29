@@ -100,6 +100,8 @@ public class BrokerConfig {
     private long startAcceptSendRequestTimeStamp = 0L;
     
     private int broker2ClientThreadPoolNums = 4;
+	
+	private boolean transactionEnable = false; //事务消息处理相关机制是否开启
     
     public long getStartAcceptSendRequestTimeStamp() {
         return startAcceptSendRequestTimeStamp;
@@ -511,4 +513,12 @@ public class BrokerConfig {
     public void setBroker2ClientThreadPoolNums(int broker2ClientThreadPoolNums) {
         this.broker2ClientThreadPoolNums = broker2ClientThreadPoolNums;
     }
+
+	public boolean isTransactionEnable() {
+		return transactionEnable;
+	}
+	
+    public void setTransactionEnable(boolean transactionEnable) {
+		this.transactionEnable = transactionEnable;
+	}
 }

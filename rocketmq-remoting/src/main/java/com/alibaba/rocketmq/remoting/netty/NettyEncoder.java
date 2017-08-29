@@ -16,16 +16,19 @@
  */
 package com.alibaba.rocketmq.remoting.netty;
 
-import com.alibaba.rocketmq.remoting.common.RemotingHelper;
-import com.alibaba.rocketmq.remoting.common.RemotingUtil;
-import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.MessageToByteEncoder;
+import java.nio.ByteBuffer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
+import com.alibaba.rocketmq.remoting.common.RemotingHelper;
+import com.alibaba.rocketmq.remoting.common.RemotingUtil;
+import com.alibaba.rocketmq.remoting.protocol.RemotingCommand;
+
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.MessageToByteEncoder;
 
 
 /**
@@ -38,6 +41,8 @@ public class NettyEncoder extends MessageToByteEncoder<RemotingCommand> {
     @Override
     public void encode(ChannelHandlerContext ctx, RemotingCommand remotingCommand, ByteBuf out)
             throws Exception {
+        System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyEncoder.encode编码处理开始...");
+        
         try {
             ByteBuffer header = remotingCommand.encodeHeader();
             out.writeBytes(header);
@@ -52,5 +57,26 @@ public class NettyEncoder extends MessageToByteEncoder<RemotingCommand> {
             }
             RemotingUtil.closeChannel(ctx.channel());
         }
+        
+        System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyEncoder.encode编码处理完成...");
     }
+
+	@Override
+	public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyEncoder.write处理开始...");
+        
+		super.write(ctx, msg, promise);
+		
+        System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyEncoder.write处理完成...");
+	}
+
+	@Override
+	public void flush(ChannelHandlerContext ctx) throws Exception {
+        System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyEncoder.flush处理开始...");
+        
+		super.flush(ctx);
+		
+        System.out.println("---------------------[" + Thread.currentThread().getName() + "]NettyEncoder.flush处理完成...");
+	}
+	
 }

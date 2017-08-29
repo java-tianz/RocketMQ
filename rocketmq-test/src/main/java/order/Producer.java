@@ -3,10 +3,14 @@ package order;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.alibaba.rocketmq.client.exception.MQClientException;
 import com.alibaba.rocketmq.client.producer.DefaultMQProducer;
 import com.alibaba.rocketmq.client.producer.SendResult;
 import com.alibaba.rocketmq.common.message.Message;
+import com.alibaba.rocketmq.common.message.MessageQueue;
 import com.alibaba.rocketmq.remoting.common.RemotingHelper;
 
 /**
@@ -16,18 +20,19 @@ import com.alibaba.rocketmq.remoting.common.RemotingHelper;
  */
 public class Producer {
 	private static AtomicInteger finishNum = new AtomicInteger(0);
-	
+	private static final Logger log = LoggerFactory.getLogger(Producer.class);
+
 	 public static void main(String[] args) throws MQClientException, InterruptedException {
 		 	final long s = System.currentTimeMillis();
 	        final DefaultMQProducer producer = new DefaultMQProducer("YOUR_PRODUCER_GROUP"); // (1)
-	        producer.setNamesrvAddr("192.168.0.118:9876;192.168.0.119:9876");
+	        producer.setNamesrvAddr("192.168.0.118:9876");
 	        producer.start(); // (2)
 	        final int count;
 	        //if(args != null){
 //		        producer.setNamesrvAddr(args[0]);
 		        //count = Integer.parseInt(args[0]);
 	        //}else{
-	        	count = 1000;
+	        	count = 10;
 	        //}
 	        final int orderId = 123456; //订单id
 	        final MessageQueueSelectorById messageQueueSelector = new MessageQueueSelectorById();
@@ -37,13 +42,13 @@ public class Producer {
 //	        	new Thread(new Runnable() {
 //					public void run() {
 						 try {
-			                Message msg = new Message("TopicABC6",// topic // (3)
+			                Message msg = new Message("TopicOrderTest",// topic // (3)
 			                        "TagA",// tag (4)
 			                        "id-test-" + ii   ,// key：自定义Key，可以用于去重，可为null
 			                        ("Hello RocketMQ " + ii).getBytes(RemotingHelper.DEFAULT_CHARSET)// body (5)
 			                );
-			                SendResult sendResult = producer.send(msg, messageQueueSelector, orderId); // (6)
-			                System.out.println(sendResult);
+			                SendResult sendResult = producer.send(msg, new MessageQueue("TopicOrderTest", "broker-a", 0)); // (6)
+			                log.info(sendResult.toString());
 			                finishNum.incrementAndGet();
 			            } catch (Exception e) {
 			                e.printStackTrace();

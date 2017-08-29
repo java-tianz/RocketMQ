@@ -207,7 +207,8 @@ public class BrokerController {
         result = result && this.topicConfigManager.load();
         result = result && this.consumerOffsetManager.load();
         result = result && this.subscriptionGroupManager.load();
-        if (BrokerRole.SLAVE != this.messageStoreConfig.getBrokerRole()) { //主节点才需要加载这个
+        if (getBrokerConfig().isTransactionEnable() 
+        		&& BrokerRole.SLAVE != this.messageStoreConfig.getBrokerRole()) { //主节点才需要加载这个
         	result = result && this.jdbcTransactionStore.open();
         }
         
@@ -356,18 +357,20 @@ public class BrokerController {
                     }
                 }, 1000 * 10, 1000 * 60, TimeUnit.MILLISECONDS);
             } else {
-                this.transactionStateChecker = new DefaultTransactionStateChecker(this);
-                this.checkTransactionStateExecutorService = Executors.newScheduledThreadPool(brokerConfig.getBroker2ClientThreadPoolNums(), new ThreadFactoryImpl("Broker2ClientService_"));
-            	this.checkTransactionStateExecutorService.scheduleAtFixedRate(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            transactionStateChecker.check();
-                        } catch (Exception e) {
-                            log.error("Schedule check", e);
-                        }
-                    }
-                }, 30, 30, TimeUnit.SECONDS);
+            	if(getBrokerConfig().isTransactionEnable()){
+            		this.transactionStateChecker = new DefaultTransactionStateChecker(this);
+            		this.checkTransactionStateExecutorService = Executors.newScheduledThreadPool(brokerConfig.getBroker2ClientThreadPoolNums(), new ThreadFactoryImpl("Broker2ClientService_"));
+            		this.checkTransactionStateExecutorService.scheduleAtFixedRate(new Runnable() {
+	                    @Override
+	                    public void run() {
+	                        try {
+	                            transactionStateChecker.check();
+	                        } catch (Exception e) {
+	                            log.error("Schedule check", e);
+	                        }
+	                    }
+	                }, 30, 30, TimeUnit.SECONDS);
+            	}
             	
                 this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
